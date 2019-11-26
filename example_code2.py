@@ -180,7 +180,7 @@ def Gener():
     u5 = up_block(u4, c1, f[0])
 
     #autoencoder egress layer. Flatten and any perceptron layers would succeed this layer
-    outputs = Conv2D(3, (1, 1), padding='same', activation = 'relu')(u5)
+    outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(u5)
 
 
     #Keras model output

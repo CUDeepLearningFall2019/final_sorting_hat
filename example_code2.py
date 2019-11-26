@@ -1,5 +1,6 @@
 from tensorflow.keras.layers import Input, Reshape, Dropout, Dense, Flatten, BatchNormalization, Activation, ZeroPadding2D
 from tensorflow.keras.layers import Conv2D, UpSampling2D, Concatenate, LeakyReLU, MaxPool2D, Input
+from tensorflow.keras.layers import MaxPooling2D, Permute
 from tensorflow.keras import models
 from tensorflow.keras.models import Sequential, load_model, Model
 from tensorflow.keras.optimizers import Adam
@@ -13,8 +14,6 @@ from PIL import Image
 
 grph = tf.get_default_graph()
 sess = tf.Session(graph=grph)
-
-from resizeimage import resizeimage
 
 #try:
     #from google.colab import drive
@@ -57,12 +56,12 @@ BATCH_SIZE = 64
 # Note, that file is large enough to cause problems for sume verisons of Pickle,
 # so Numpy binary files are used.
 training_binary_path = os.path.join(DATA_PATH,f'training_data_{WIDTH}_{HEIGHT}.npy')
+training_binary_path = "../data/Video/video1.npy"
 
 print(f"Looking for file: {training_binary_path}")
 
 if not os.path.isfile(training_binary_path):
   print("Loading training images...")
-
   training_data = []
   faces_path = os.path.join(DATA_PATH,'frames_test')
   for filename in tqdm(os.listdir(faces_path)):
@@ -71,7 +70,6 @@ if not os.path.isfile(training_binary_path):
       training_data.append(np.asarray(image))
   training_data = np.reshape(training_data,(-1,INPUT_SHAPE,IMAGE_CHANNELS))
   training_data = training_data / 127.5 - 1.
-
   print("Saving training image binary...")
   np.save(training_binary_path,training_data)
 else:
@@ -189,7 +187,7 @@ def Gener(input_dim, image_channels):
     f= [8, 16, 32, 64, 128, 256]
 
     #Data shape entering the convolusion
-    inputs = Input((input_dim, image_channels))
+    inputs = Input((720,1280,3))
 
 
     #Input layer
@@ -220,48 +218,48 @@ def Gener(input_dim, image_channels):
     outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(u5)
 
     #Keras model output
-    model = Model(inputs, outputs)
+    model = Model(inputs, outputs, name='gener')
 
     return model
 
 
 
-def build_discriminator(image_shape):
+def build_discriminator(image_shape= (720,1280,3)):
 
-	model = Sequential()
-	model.add(Conv2D(32, kernel_size=3, strides=2, input_shape=image_shape, padding="same"))
-	model.add(LeakyReLU(alpha=0.2))
+    model = Sequential()
+    model.add(Conv2D(32, kernel_size=3, strides=2, input_shape=image_shape, padding="same"))
+    model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Dropout(0.25))
-	model.add(Conv2D(64, kernel_size=3, strides=2, padding="same"))
-	model.add(ZeroPadding2D(padding=((0,1),(0,1))))
-	model.add(BatchNormalization(momentum=0.8))
-	model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    model.add(Conv2D(64, kernel_size=3, strides=2, padding="same"))
+    model.add(ZeroPadding2D(padding=((0,1),(0,1))))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Dropout(0.25))
-	model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
-	model.add(BatchNormalization(momentum=0.8))
-	model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    model.add(Conv2D(128, kernel_size=3, strides=2, padding="same"))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Dropout(0.25))
-	model.add(Conv2D(256, kernel_size=3, strides=1, padding="same"))
-	model.add(BatchNormalization(momentum=0.8))
-	model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    model.add(Conv2D(256, kernel_size=3, strides=1, padding="same"))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Dropout(0.25))
-	model.add(Conv2D(512, kernel_size=3, strides=1, padding="same"))
-	model.add(BatchNormalization(momentum=0.8))
-	model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.25))
+    model.add(Conv2D(512, kernel_size=3, strides=1, padding="same"))
+    model.add(BatchNormalization(momentum=0.8))
+    model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Dropout(0.25))
-	model.add(Flatten())
-	model.add(Dense(1, activation='sigmoid'))
-	model.add(Reshape((64, 64, 3)))
-	input_image = Input(shape=image_shape)
+    model.add(Dropout(0.25))
+    model.add(Flatten())
+    model.add(Dense(1, activation='sigmoid'))
+    model.add(Reshape((64, 64, 3)))
+    input_image = Input(shape=image_shape)
 
-	validity = model(input_image)
+    validity = model(input_image)
 
-	return Model(input_image, validity, name = "Discriminator")
+    return Model(input_image, validity, name = "Discriminator")
 
 #def save_images(cnt,noise):
 #  image_array = np.full((
@@ -293,10 +291,11 @@ def build_discriminator(image_shape):
 image_shape = (INPUT_SHAPE, IMAGE_CHANNELS)
 optimizer = Adam(1.5e-4,0.5) # learning rate and momentum adjusted from paper
 
-discriminator = build_discriminator(image_shape)
+discriminator = build_discriminator()
 discriminator.trainable = False
 discriminator.compile(loss="binary_crossentropy",optimizer=optimizer,metrics=["accuracy"])
-generator = gener(INPUT_SHAPE,IMAGE_CHANNELS)
+from tensorflow.keras.layers import MaxPooling2D, Permute, Bidirectional, GRU
+gener = Gener(INPUT_SHAPE,IMAGE_CHANNELS)
 
 random_input = Input(shape=(SEED_SIZE,))
 

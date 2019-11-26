@@ -31,8 +31,10 @@ from resizeimage import resizeimage
 # Note GENERATE_RES higher than 4 will blow Google CoLab's memory.
 GENERATE_RES = 2 # (1=32, 2=64, 3=96, etc.)
 GENERATE_SQUARE = 32 * GENERATE_RES # rows/cols (should be square)
+HEIGHT = 720
+WIDTH = 1280
 IMAGE_CHANNELS = 3
-INPUT_SHAPE = (GENERATE_SQUARE, GENERATE_SQUARE)
+INPUT_SHAPE = (HEIGHT, WIDTH)
 
 # Preview image
 PREVIEW_ROWS = 4
@@ -48,13 +50,13 @@ DATA_PATH = ''
 EPOCHS = 10
 BATCH_SIZE = 64
 
-print(f"Will generate {GENERATE_SQUARE}px square images.")
+#print(f"Will generate {GENERATE_SQUARE}px square images.")
 
 # Image set has 11,682 images.  Can take over an hour for initial preprocessing.
 # Because of this time needed, save a Numpy preprocessed file.
 # Note, that file is large enough to cause problems for sume verisons of Pickle,
 # so Numpy binary files are used.
-training_binary_path = os.path.join(DATA_PATH,f'training_data_{GENERATE_SQUARE}_{GENERATE_SQUARE}.npy')
+training_binary_path = os.path.join(DATA_PATH,f'training_data_{WIDTH}_{HEIGHT}.npy')
 
 print(f"Looking for file: {training_binary_path}")
 
@@ -226,8 +228,6 @@ def Gener(input_dim, image_channels):
 
 def build_discriminator(image_shape):
 
-#first layer is concatenated image
-
 	model = Sequential()
 	model.add(Conv2D(32, kernel_size=3, strides=2, input_shape=image_shape, padding="same"))
 	model.add(LeakyReLU(alpha=0.2))
@@ -263,32 +263,32 @@ def build_discriminator(image_shape):
 
 	return Model(input_image, validity, name = "Discriminator")
 
-def save_images(cnt,noise):
-  image_array = np.full((
-      PREVIEW_MARGIN + (PREVIEW_ROWS * (GENERATE_SQUARE+PREVIEW_MARGIN)),
-      PREVIEW_MARGIN + (PREVIEW_COLS * (GENERATE_SQUARE+PREVIEW_MARGIN)), 3),
-      255, dtype=np.uint8)
-
-  generated_images = generator.predict(noise)
-
-  generated_images = 0.5 * generated_images + 0.5
-
-  image_count = 0
-  for row in range(PREVIEW_ROWS):
-      for col in range(PREVIEW_COLS):
-        r = row * (GENERATE_SQUARE+16) + PREVIEW_MARGIN
-        c = col * (GENERATE_SQUARE+16) + PREVIEW_MARGIN
-        image_array[r:r+GENERATE_SQUARE,c:c+GENERATE_SQUARE] = generated_images[image_count] * 255
-        image_count += 1
-
-
-  output_path = os.path.join(DATA_PATH,'output')
-  if not os.path.exists(output_path):
-    os.makedirs(output_path)
-
-  filename = os.path.join(output_path,f"train-{cnt}.png")
-  im = Image.fromarray(image_array)
-  im.save(filename)
+#def save_images(cnt,noise):
+#  image_array = np.full((
+#      PREVIEW_MARGIN + (PREVIEW_ROWS * (GENERATE_SQUARE+PREVIEW_MARGIN)),
+#      PREVIEW_MARGIN + (PREVIEW_COLS * (GENERATE_SQUARE+PREVIEW_MARGIN)), 3),
+#      255, dtype=np.uint8)
+#
+#  generated_images = generator.predict(noise)
+#
+#  generated_images = 0.5 * generated_images + 0.5
+#
+#  image_count = 0
+#  for row in range(PREVIEW_ROWS):
+#      for col in range(PREVIEW_COLS):
+#        r = row * (GENERATE_SQUARE+16) + PREVIEW_MARGIN
+#        c = col * (GENERATE_SQUARE+16) + PREVIEW_MARGIN
+#        image_array[r:r+GENERATE_SQUARE,c:c+GENERATE_SQUARE] = generated_images[image_count] * 255
+#        image_count += 1
+#
+#
+#  output_path = os.path.join(DATA_PATH,'output')
+#  if not os.path.exists(output_path):
+#    os.makedirs(output_path)
+#
+#  filename = os.path.join(output_path,f"train-{cnt}.png")
+#  im = Image.fromarray(image_array)
+#  im.save(filename)
 
 image_shape = (INPUT_SHAPE, IMAGE_CHANNELS)
 optimizer = Adam(1.5e-4,0.5) # learning rate and momentum adjusted from paper
@@ -296,11 +296,11 @@ optimizer = Adam(1.5e-4,0.5) # learning rate and momentum adjusted from paper
 discriminator = build_discriminator(image_shape)
 discriminator.trainable = False
 discriminator.compile(loss="binary_crossentropy",optimizer=optimizer,metrics=["accuracy"])
-generator = build_generator(SEED_SIZE,IMAGE_CHANNELS)
+generator = gener(INPUT_SHAPE,IMAGE_CHANNELS)
 
 random_input = Input(shape=(SEED_SIZE,))
 
-generated_image = generator(random_input)
+generated_image = gener(random_input)
 
 validity = discriminator(generated_image)
 combined = Model(random_input,validity)
@@ -321,7 +321,7 @@ for epoch in range(EPOCHS):
 
     # Generate some images
     seed = np.random.normal(0,1,(BATCH_SIZE,SEED_SIZE))
-    x_fake = generator.predict(seed)
+    x_fake = gener.predict(seed)
 
     print("xxxx")
     print(x_real.shape)
@@ -341,5 +341,5 @@ for epoch in range(EPOCHS):
         cnt += 1
         print(f"Epoch {epoch}, Discriminator accuarcy: {discriminator_metric[1]}, Generator accuracy: {generator_metric[1]}")
 
-generator.save(os.path.join(DATA_PATH,"face_generator.h5"))
+gener.save(os.path.join(DATA_PATH,"face_generator.h5"))
 

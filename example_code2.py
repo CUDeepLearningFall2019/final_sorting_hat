@@ -113,14 +113,14 @@ def build_generator(seed_size, channels):
 '''
 
 def noise_enc():
-
+    ne = None
     return ne
 
 ###Rory code
 
-def audio_enc():
+def context_enc():
 
-    return ae
+    return ce
     
 #UNET Functions
 
@@ -139,8 +139,9 @@ def up_block(x, skip, filters, kernal_size =(3, 3), padding='same', strides= 1):
 
 def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strides=1):
     concat1 = Concatenate()([IE, AE])
-    concat2 = Concatenate()([concat1, NE])
-    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat2)
+    #because we are not using gausian noise, I have commented out that concatentation and only passed the first concat
+    #concat2 = Concatenate()([concat1, NE])
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat1)
     c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
     return c
 

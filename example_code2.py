@@ -76,6 +76,8 @@ else:
   print("Loading previous training pickle...")
   training_data = np.load(training_binary_path)
   
+
+'''
 def build_generator(seed_size, channels):
 
 	model = Sequential()
@@ -108,6 +110,84 @@ def build_generator(seed_size, channels):
 	generated_image = model(input)
 	
 	return Model(input,generated_image, name = "Generator")
+
+'''
+
+def noise_enc():
+
+    return ne
+
+###Rory code
+
+def audio_enc():
+
+    return ae
+    
+#UNET Functions
+
+def down_block(x, filters, kernal_size = (3, 3), padding ='same', strides=1):
+    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(x)
+    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    p = keras.layers.MaxPool2D((2, 2), (2, 2))(c)
+    return c, p
+
+def up_block(x, skip, filters, kernal_size =(3, 3), padding='same', strides= 1):
+    us = keras.layers.UpSampling2D((2, 2))(x)
+    concat = keras.layers.Concatenate()([us, skip])
+    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat)
+    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    return c
+
+def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strides=1):
+    concat1 = keras.layers.Concatenate()([IE, AE])
+    concat2 = keras.layers.Concatenate()([concat1, NE])
+    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat2)
+    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    return c
+
+
+
+def Gener():
+    #Filters per layers
+    f= [8, 16, 32, 64, 128, 256]
+
+    #Data shape entering the convolusion
+    inputs = keras.layers.Input((image_size, image_size, 3))
+
+
+    #Input layer
+    p0= inputs
+
+    #Down bloc encoding
+    c1, p1 = down_block(p0, f[0])
+    c2, p2 = down_block(p1, f[1])
+    c3, p3 = down_block(p2, f[2])
+    c4, p4 = down_block(p3, f[3])
+    c5, p5 = down_block(p4, f[4])
+
+    #switch over layer to up bloc decoder
+    ne = noise_enc()
+    ae = context_enc()
+
+
+    bn = bottleneck(p5, ae, ne, f[5])
+
+    #Up bloc decoding
+    u1 = up_block(bn, c5, f[4])
+    u2 = up_block(u1, c4, f[3])
+    u3 = up_block(u2, c3, f[2])
+    u4 = up_block(u3, c2, f[1])
+    u5 = up_block(u4, c1, f[0])
+
+    #autoencoder egress layer. Flatten and any perceptron layers would succeed this layer
+    outputs = keras.layers.Conv2D(3, (1, 1), padding='same', activation = 'relu')(u5)
+
+
+    #Keras model output
+    model = keras.models.Model(inputs, outputs)
+
+    return model
+
 
 
 def build_discriminator(image_shape):
@@ -228,3 +308,4 @@ for epoch in range(EPOCHS):
         print(f"Epoch {epoch}, Discriminator accuarcy: {discriminator_metric[1]}, Generator accuracy: {generator_metric[1]}")
         
 generator.save(os.path.join(DATA_PATH,"face_generator.h5"))
+

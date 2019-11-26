@@ -183,12 +183,12 @@ def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strid
 
 
 
-def Gener():
+def Gener(input_dim, image_channels):
     #Filters per layers
     f= [8, 16, 32, 64, 128, 256]
 
     #Data shape entering the convolusion
-    inputs = Input((image_size, image_size, 3))
+    inputs = Input((input_dim, image_channels))
 
 
     #Input layer

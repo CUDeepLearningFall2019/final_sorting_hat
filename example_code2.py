@@ -1,6 +1,5 @@
 from tensorflow.keras.layers import Input, Reshape, Dropout, Dense, Flatten, BatchNormalization, Activation, ZeroPadding2D
-from tensorflow.keras.layers import LeakyReLU
-from tensorflow.keras.layers import Conv2D, UpSampling2D
+from tensorflow.keras.layers import Conv2D, UpSampling2D, Concatenate, LeakyReLU, MaxPool2D, Input
 from tensorflow.keras import models
 from tensorflow.keras.models import Sequential, load_model, Model
 from tensorflow.keras.optimizers import Adam
@@ -126,23 +125,23 @@ def audio_enc():
 #UNET Functions
 
 def down_block(x, filters, kernal_size = (3, 3), padding ='same', strides=1):
-    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(x)
-    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
-    p = keras.layers.MaxPool2D((2, 2), (2, 2))(c)
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(x)
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    p = MaxPool2D((2, 2), (2, 2))(c)
     return c, p
 
 def up_block(x, skip, filters, kernal_size =(3, 3), padding='same', strides= 1):
-    us = keras.layers.UpSampling2D((2, 2))(x)
-    concat = keras.layers.Concatenate()([us, skip])
-    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat)
-    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    us = UpSampling2D((2, 2))(x)
+    concat = Concatenate()([us, skip])
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat)
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
     return c
 
 def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strides=1):
-    concat1 = keras.layers.Concatenate()([IE, AE])
-    concat2 = keras.layers.Concatenate()([concat1, NE])
-    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat2)
-    c= keras.layers.Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    concat1 = Concatenate()([IE, AE])
+    concat2 = Concatenate()([concat1, NE])
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat2)
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
     return c
 
 
@@ -152,7 +151,7 @@ def Gener():
     f= [8, 16, 32, 64, 128, 256]
 
     #Data shape entering the convolusion
-    inputs = keras.layers.Input((image_size, image_size, 3))
+    inputs = Input((image_size, image_size, 3))
 
 
     #Input layer
@@ -180,11 +179,11 @@ def Gener():
     u5 = up_block(u4, c1, f[0])
 
     #autoencoder egress layer. Flatten and any perceptron layers would succeed this layer
-    outputs = keras.layers.Conv2D(3, (1, 1), padding='same', activation = 'relu')(u5)
+    outputs = Conv2D(3, (1, 1), padding='same', activation = 'relu')(u5)
 
 
     #Keras model output
-    model = keras.models.Model(inputs, outputs)
+    model = Model(inputs, outputs)
 
     return model
 

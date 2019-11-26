@@ -32,6 +32,7 @@ from resizeimage import resizeimage
 GENERATE_RES = 2 # (1=32, 2=64, 3=96, etc.)
 GENERATE_SQUARE = 32 * GENERATE_RES # rows/cols (should be square)
 IMAGE_CHANNELS = 3
+INPUT_SHAPE = (GENERATE_SQUARE, GENERATE_SQUARE)
 
 # Preview image
 PREVIEW_ROWS = 4
@@ -64,9 +65,9 @@ if not os.path.isfile(training_binary_path):
   faces_path = os.path.join(DATA_PATH,'frames_test')
   for filename in tqdm(os.listdir(faces_path)):
       path = os.path.join(faces_path,filename)
-      image = Image.open(path).resize((GENERATE_SQUARE,GENERATE_SQUARE),Image.ANTIALIAS)
+      image = Image.open(path).resize(INPUT_SHAPE,Image.ANTIALIAS)
       training_data.append(np.asarray(image))
-  training_data = np.reshape(training_data,(-1,GENERATE_SQUARE,GENERATE_SQUARE,IMAGE_CHANNELS))
+  training_data = np.reshape(training_data,(-1,INPUT_SHAPE,IMAGE_CHANNELS))
   training_data = training_data / 127.5 - 1.
 
   print("Saving training image binary...")
@@ -181,8 +182,6 @@ def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strid
     c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
     return c
 
-
-
 def Gener(input_dim, image_channels):
     #Filters per layers
     f= [8, 16, 32, 64, 128, 256]
@@ -217,7 +216,6 @@ def Gener(input_dim, image_channels):
 
     #autoencoder egress layer. Flatten and any perceptron layers would succeed this layer
     outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(u5)
-
 
     #Keras model output
     model = Model(inputs, outputs)
@@ -292,7 +290,7 @@ def save_images(cnt,noise):
   im = Image.fromarray(image_array)
   im.save(filename)
 
-image_shape = (GENERATE_SQUARE,GENERATE_SQUARE,IMAGE_CHANNELS)
+image_shape = (INPUT_SHAPE, IMAGE_CHANNELS)
 optimizer = Adam(1.5e-4,0.5) # learning rate and momentum adjusted from paper
 
 discriminator = build_discriminator(image_shape)

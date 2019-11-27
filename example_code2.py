@@ -1,36 +1,47 @@
 import warnings
 # Don't fear the future
 warnings.simplefilter(action='ignore', category=FutureWarning)
-from tensorflow.keras.layers import Input, Reshape, Dropout, Dense, Flatten, BatchNormalization, Activation, ZeroPadding2D
-from tensorflow.keras.layers import Conv2D, UpSampling2D, Concatenate, LeakyReLU, MaxPool2D, Input
-from tensorflow.keras.layers import MaxPooling2D, Permute
+# load all the layers
+from tensorflow.keras.layers import Activation
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import Bidirectional
+from tensorflow.keras.layers import Concatenate
+from tensorflow.keras.layers import Conv2D
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import GRU
+from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import LeakyReLU
+from tensorflow.keras.layers import MaxPool2D
+from tensorflow.keras.layers import MaxPooling2D
+from tensorflow.keras.layers import Permute
+from tensorflow.keras.layers import Reshape
+from tensorflow.keras.layers import TimeDistributed
+from tensorflow.keras.layers import UpSampling2D
+from tensorflow.keras.layers import ZeroPadding2D
+# load model
+from tensorflow.keras.models import Model
 from tensorflow.keras import models
 from tensorflow.keras.models import Sequential, load_model, Model
-from tensorflow.keras.optimizers import Adam
+# load back end
 from tensorflow.keras import backend
+# load optimizers
+from tensorflow.keras.optimizers import Adam
+# load other tensor stuff
 import tensorflow as tf
+# load other stuff stuff
+import os
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-import os
-from PIL import Image
 
 grph = tf.get_default_graph()
 sess = tf.Session(graph=grph)
 
-#try:
-    #from google.colab import drive
-    #drive.mount('/content/drive', force_remount=True)
-    #COLAB = True
-    #print("Note: using Google CoLab")
-    #%tensorflow_version 2.x
-#except:
-    #print("Note: not using Google CoLab")
-    #COLAB = True
-
 # Generation resolution - Must be square
 # Training data is also scaled to this.
-# Note GENERATE_RES higher than 4 will blow Google CoLab's memory.
+# Note GENERATEoRES higher than 4 will blow Google CoLab's memory.
 GENERATE_RES = 2 # (1=32, 2=64, 3=96, etc.)
 GENERATE_SQUARE = 32 * GENERATE_RES # rows/cols (should be square)
 HEIGHT = 720
@@ -80,42 +91,6 @@ else:
   training_data = np.load(training_binary_path)
 
 
-'''
-def build_generator(seed_size, channels):
-
-	model = Sequential()
-
-	model.add(Dense(4*4*256,activation="relu",input_dim=seed_size))
-	model.add(Reshape((4,4,256)))
-
-	model.add(UpSampling2D())
-	model.add(Conv2D(256,kernel_size=3,padding="same"))
-	model.add(BatchNormalization(momentum=0.8))
-	model.add(Activation("relu"))
-
-	model.add(UpSampling2D())
-	model.add(Conv2D(256,kernel_size=3,padding="same"))
-	model.add(BatchNormalization(momentum=0.8))
-	model.add(Activation("relu"))
-
-	# Output resolution, additional upsampling
-	for i in range(GENERATE_RES):
-		model.add(UpSampling2D())
-		model.add(Conv2D(128,kernel_size=3,padding="same"))
-		model.add(BatchNormalization(momentum=0.8))
-		model.add(Activation("relu"))
-
-	# Final CNN layer
-	model.add(Conv2D(channels,kernel_size=3,padding="same"))
-	model.add(Activation("tanh"))
-
-	input = Input(shape=(seed_size,))
-	generated_image = model(input)
-
-	return Model(input,generated_image, name = "Generator")
-
-'''
-
 def noise_enc():
     ne = None
     return ne
@@ -125,12 +100,15 @@ def noise_enc():
 def context_enc():
     # one aproch
     # https://towardsdatascience.com/an-approach-towards-convolutional-recurrent-neural-networks-f54cbeecd4a6
+
     # vary setings
     shape_in = int(320), int(8), int(1)
     shape_out = int(8134), int(120)
     dropoutrate = 0.3
+
     x_start = Input(shape=(shape_in))
     x = x_start
+
     for _i, _cnt in enumerate((2, 2)):
         x = Conv2D(filters = 100, kernel_size=(2, 2), padding='same',)(x)
         x = BatchNormalization(axis=1)(x)
@@ -139,8 +117,10 @@ def context_enc():
         #x = MaxPooling2D(pool_size=(2,2), dim_ordering="th" )(x)
         x = MaxPooling2D(pool_size=2)(x)
         spec_x = Dropout(dropoutrate)(x)
+
     x = Permute((2, 1, 3))(x)
     x = Reshape((1, -1))(x)
+
     # The Gru/recurrent portion
     # Get some knowledge
     # http://colah.github.io/posts/2015-08-Understanding-LSTMs/
@@ -154,11 +134,13 @@ def context_enc():
                 merge_mode='concat')(x)
         for f in ((2,2)):
             x = TimeDistributed(Dense(f))(x)
+
     x = Dropout(dropoutrate)(x)
     x = TimeDistributed(Dense(shape_out[-1]))(x)
     out = Activation('sigmoid', name='strong_out')(x)
     audio_context = Model(inputs=x_start, outputs=out)
     audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    audio_context.summary()
     ce = audio_context
     return ce
 
@@ -263,32 +245,6 @@ def build_discriminator(image_shape= (720,1280,3)):
 
     return Model(input_image, validity, name = "Discriminator")
 
-#def save_images(cnt,noise):
-#  image_array = np.full((
-#      PREVIEW_MARGIN + (PREVIEW_ROWS * (GENERATE_SQUARE+PREVIEW_MARGIN)),
-#      PREVIEW_MARGIN + (PREVIEW_COLS * (GENERATE_SQUARE+PREVIEW_MARGIN)), 3),
-#      255, dtype=np.uint8)
-#
-#  generated_images = generator.predict(noise)
-#
-#  generated_images = 0.5 * generated_images + 0.5
-#
-#  image_count = 0
-#  for row in range(PREVIEW_ROWS):
-#      for col in range(PREVIEW_COLS):
-#        r = row * (GENERATE_SQUARE+16) + PREVIEW_MARGIN
-#        c = col * (GENERATE_SQUARE+16) + PREVIEW_MARGIN
-#        image_array[r:r+GENERATE_SQUARE,c:c+GENERATE_SQUARE] = generated_images[image_count] * 255
-#        image_count += 1
-#
-#
-#  output_path = os.path.join(DATA_PATH,'output')
-#  if not os.path.exists(output_path):
-#    os.makedirs(output_path)
-#
-#  filename = os.path.join(output_path,f"train-{cnt}.png")
-#  im = Image.fromarray(image_array)
-#  im.save(filename)
 
 image_shape = (INPUT_SHAPE, IMAGE_CHANNELS)
 optimizer = Adam(1.5e-4,0.5) # learning rate and momentum adjusted from paper
@@ -296,7 +252,6 @@ optimizer = Adam(1.5e-4,0.5) # learning rate and momentum adjusted from paper
 discriminator = build_discriminator()
 discriminator.trainable = False
 discriminator.compile(loss="binary_crossentropy",optimizer=optimizer,metrics=["accuracy"])
-from tensorflow.keras.layers import MaxPooling2D, Permute, Bidirectional, GRU
 gener = Gener(INPUT_SHAPE,IMAGE_CHANNELS)
 
 random_input = Input(shape=(SEED_SIZE,))

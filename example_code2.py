@@ -21,7 +21,6 @@ from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.layers import UpSampling2D
 from tensorflow.keras.layers import ZeroPadding2D
 # load model
-from tensorflow.keras.models import Model
 from tensorflow.keras import models
 from tensorflow.keras.models import Sequential, load_model, Model
 # load back end
@@ -112,14 +111,14 @@ def context_enc():
     for _i, _cnt in enumerate((2, 2)):
         x = Conv2D(filters = 100, kernel_size=(2, 2), padding='same',)(x)
         x = BatchNormalization(axis=1)(x)
-        x = Activation('relu')(x)
+        #x = Activation('relu')(x)
         x = LeakyReLU()(x)
         #x = MaxPooling2D(pool_size=(2,2), dim_ordering="th" )(x)
         x = MaxPooling2D(pool_size=2)(x)
-        spec_x = Dropout(dropoutrate)(x)
+        x = Dropout(dropoutrate)(x)
 
     x = Permute((2, 1, 3))(x)
-    x = Reshape((1, -1))(x)
+    x = Reshape((1, 16000))(x)
 
     # The Gru/recurrent portion
     # Get some knowledge
@@ -136,13 +135,17 @@ def context_enc():
             x = TimeDistributed(Dense(f))(x)
 
     x = Dropout(dropoutrate)(x)
-    x = TimeDistributed(Dense(shape_out[-1]))(x)
+    x = TimeDistributed(Dense(880))(x)
+    # arbitrary reshape may be a problem
+    x = Reshape((22,40,1))(x)
     out = Activation('sigmoid', name='strong_out')(x)
-    audio_context = Model(inputs=x_start, outputs=out)
-    audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
-    audio_context.summary()
-    ce = audio_context
+    #audio_context = Model(inputs=x_start, outputs=out)
+    #audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #audio_context.summary()
+    ce = out
+    #ce = audio_context
     return ce
+
 
 #UNET Functions
 
@@ -159,12 +162,24 @@ def up_block(x, skip, filters, kernal_size =(3, 3), padding='same', strides= 1):
     c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
     return c
 
+def up_block1(x, skip, filters, kernal_size =(3, 3), padding='same', strides= 1):
+    concat = Concatenate()([x, skip])
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat)
+    c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    return c
+
 def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strides=1):
     concat1 = Concatenate()([IE, AE])
+    #concat1 = Concatenate()([p5, context_enc()])
+    #filters = f[5]
     #because we are not using gausian noise, I have commented out that concatentation and only passed the first concat
     #concat2 = Concatenate()([concat1, NE])
     c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(concat1)
     c= Conv2D(filters, kernal_size, padding=padding, strides=strides, activation='relu')(c)
+    #c = Activation('linear')(c)
+    #Flatten()(c)
+    #c = Dense((45, 80, 63))(c)
+    c = Reshape((45, 80, 63))(c)
     return c
 
 def Gener(input_dim, image_channels):
@@ -193,7 +208,7 @@ def Gener(input_dim, image_channels):
     bn = bottleneck(p5, ae, ne, f[5])
 
     #Up bloc decoding
-    u1 = up_block(bn, c5, f[4])
+    u1 = up_block1(bn, c5, f[4])
     u2 = up_block(u1, c4, f[3])
     u3 = up_block(u2, c3, f[2])
     u4 = up_block(u3, c2, f[1])
@@ -201,6 +216,7 @@ def Gener(input_dim, image_channels):
 
     #autoencoder egress layer. Flatten and any perceptron layers would succeed this layer
     outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(u5)
+    outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(bn)
 
     #Keras model output
     model = Model(inputs, outputs, name='gener')

@@ -1,3 +1,6 @@
+import warnings
+# Don't fear the future
+warnings.simplefilter(action='ignore', category=FutureWarning)
 from tensorflow.keras.layers import Input, Reshape, Dropout, Dense, Flatten, BatchNormalization, Activation, ZeroPadding2D
 from tensorflow.keras.layers import Conv2D, UpSampling2D, Concatenate, LeakyReLU, MaxPool2D, Input
 from tensorflow.keras.layers import MaxPooling2D, Permute
@@ -183,8 +186,8 @@ def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strid
     return c
 
 def Gener(input_dim, image_channels):
-    #Filters per layers
     f= [8, 16, 32, 64, 128, 256]
+    #Filters per layers
 
     #Data shape entering the convolusion
     inputs = Input((720,1280,3))
@@ -221,7 +224,6 @@ def Gener(input_dim, image_channels):
     model = Model(inputs, outputs, name='gener')
 
     return model
-
 
 
 def build_discriminator(image_shape= (720,1280,3)):

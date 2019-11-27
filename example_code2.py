@@ -144,7 +144,7 @@ def context_enc():
     #audio_context.summary()
     ce = out
     #ce = audio_context
-    return ce
+    return ce, x_start
 
 
 #UNET Functions
@@ -179,6 +179,7 @@ def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strid
     #c = Activation('linear')(c)
     #Flatten()(c)
     #c = Dense((45, 80, 63))(c)
+    # fix this
     c = Reshape((45, 80, 63))(c)
     return c
 
@@ -202,8 +203,7 @@ def Gener(input_dim, image_channels):
 
     #switch over layer to up bloc decoder
     ne = noise_enc()
-    ae = context_enc()
-
+    ae, inputs2 = context_enc()
 
     bn = bottleneck(p5, ae, ne, f[5])
 
@@ -216,10 +216,10 @@ def Gener(input_dim, image_channels):
 
     #autoencoder egress layer. Flatten and any perceptron layers would succeed this layer
     outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(u5)
-    outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(bn)
+    #outputs = Conv2D(3, (1, 1), padding='same', activation = 'tanh')(bn)
 
     #Keras model output
-    model = Model(inputs, outputs, name='gener')
+    model = Model([inputs, inputs2], outputs, name='gener')
 
     return model
 
@@ -269,6 +269,7 @@ discriminator = build_discriminator()
 discriminator.trainable = False
 discriminator.compile(loss="binary_crossentropy",optimizer=optimizer,metrics=["accuracy"])
 gener = Gener(INPUT_SHAPE,IMAGE_CHANNELS)
+gener.summary()
 
 random_input = Input(shape=(SEED_SIZE,))
 

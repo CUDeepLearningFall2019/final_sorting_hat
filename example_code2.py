@@ -68,27 +68,32 @@ BATCH_SIZE = 64
 # Because of this time needed, save a Numpy preprocessed file.
 # Note, that file is large enough to cause problems for sume verisons of Pickle,
 # so Numpy binary files are used.
-training_binary_path = os.path.join(DATA_PATH,f'training_data_{WIDTH}_{HEIGHT}.npy')
-training_binary_path = "../data/Video/video1.npy"
+#training_vid_path = os.path.join(DATA_PATH,f'training_vid_{WIDTH}_{HEIGHT}.npy')
+training_vid_path = "../data/Video/video1.npy"
+training_audio_path = "../data/Audio/audio1.npy"
 
-print(f"Looking for file: {training_binary_path}")
+print(f"Looking for file: {training_vid_path}")
 
-if not os.path.isfile(training_binary_path):
+if not os.path.isfile(training_vid_path):
   print("Loading training images...")
-  training_data = []
+  training_vid = []
   faces_path = os.path.join(DATA_PATH,'frames_test')
   for filename in tqdm(os.listdir(faces_path)):
       path = os.path.join(faces_path,filename)
       image = Image.open(path).resize(INPUT_SHAPE,Image.ANTIALIAS)
-      training_data.append(np.asarray(image))
-  training_data = np.reshape(training_data,(-1,INPUT_SHAPE,IMAGE_CHANNELS))
-  training_data = training_data / 127.5 - 1.
+      training_vid.append(np.asarray(image))
+  training_vid = np.reshape(training_vid,(-1,INPUT_SHAPE,IMAGE_CHANNELS))
+  training_vid = training_vid / 127.5 - 1.
   print("Saving training image binary...")
-  np.save(training_binary_path,training_data)
+  np.save(training_vid_path,training_vid)
 else:
   print("Loading previous training pickle...")
-  training_data = np.load(training_binary_path)
+  training_vid = np.load(training_vid_path)
+  training_aud = np.load(training_audio_path)
 
+training_vid.shape
+training_aud.shape
+training_vid[0,:,:,:]
 
 def noise_enc():
     ne = None
@@ -183,7 +188,8 @@ def bottleneck(IE, AE, NE, filters, kernal_size = (3, 3), padding ='same', strid
     c = Reshape((45, 80, 63))(c)
     return c
 
-def Gener(input_dim, image_channels):
+#def Gener(input_dim, image_channels):
+def Gener():
     f= [8, 16, 32, 64, 128, 256]
     #Filters per layers
 
@@ -224,6 +230,7 @@ def Gener(input_dim, image_channels):
     return model
 
 
+
 def build_discriminator(image_shape= (720,1280,3)):
 
     model = Sequential()
@@ -261,19 +268,123 @@ def build_discriminator(image_shape= (720,1280,3)):
 
     return Model(input_image, validity, name = "Discriminator")
 
+def build_discriminator():
+    # one aproch
+    # https://towardsdatascience.com/an-approach-towards-convolutional-recurrent-neural-networks-f54cbeecd4a6
+
+    # vary setings
+    shape_in_x = int(320), int(8), int(1)
+    shape_in_y = int(720), int(1280), int(3)
+    shape_out = int(8134), int(120)
+    dropoutrate = 0.3
+
+    x_start = Input(shape=(shape_in_x))
+    x = x_start
+
+    for _i, _cnt in enumerate((2, 2)):
+        x = Conv2D(filters = 100, kernel_size=(2, 2), padding='same',)(x)
+        x = BatchNormalization(axis=1)(x)
+        #x = Activation('relu')(x)
+        x = LeakyReLU()(x)
+        #x = MaxPooling2D(pool_size=(2,2), dim_ordering="th" )(x)
+        x = MaxPooling2D(pool_size=2)(x)
+        x = Dropout(dropoutrate)(x)
+
+    x = Permute((2, 1, 3))(x)
+    x = Reshape((1, 16000))(x)
+
+    #out = Activation('sigmoid', name='strong_out')(x)
+    #audio_context = Model(inputs=x_start, outputs=out)
+    #audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #audio_context.summary()
+
+    y_start = Input(shape=(shape_in_y))
+    y = y_start
+
+    for _i, _cnt in enumerate((2, 2)):
+        y = Conv2D(filters = 100, kernel_size=(2, 2), padding='same',)(y)
+        y = BatchNormalization(axis=1)(y)
+        #y = Activation('relu')(y)
+        y = LeakyReLU()(y)
+        #y = MayPooling2D(pool_size=(2,2), dim_ordering="th" )(y)
+        y = MaxPooling2D(pool_size=2)(y)
+        y = Dropout(dropoutrate)(y)
+
+    y = Permute((2, 1, 3))(y)
+    y = Reshape((1, 5760000))(y)
+    #out = Activation('sigmoid', name='strong_out')(y)
+    #audio_context = Model(inputs=y_start, outputs=out)
+    #audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #audio_context.summary()
+
+    z = Concatenate()([x, y])
+    #out = Activation('sigmoid', name='strong_out')(z)
+    #audio_context = Model(inputs=[x_start,y_start], outputs=out)
+    #audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #audio_context.summary()
+
+
+
+    # The Gru/recurrent portion
+    # Get some knowledge
+    # http://colah.github.io/posts/2015-08-Understanding-LSTMs/
+    for r in (10,10):
+        z = Bidirectional(
+                GRU(r,
+                    activation='tanh',
+                    dropout=dropoutrate,
+                    recurrent_dropout=dropoutrate,
+                    return_sequences=True),
+                merge_mode='concat')(z)
+        for f in ((2,2)):
+            z = TimeDistributed(Dense(f))(z)
+
+    #z = Dropout(dropoutrate)(z)
+    #z = TimeDistributed(Dense(880))(z)
+    # arbitrary reshape may be a problem
+    z = Flatten()(z)
+    z = Dropout(dropoutrate)(z)
+    z = Dense(1,activation = 'sigmoid')(z)
+
+    #out = Activation('sigmoid', name='strong_out')(z)
+    descrim = Model(inputs=[x_start, y_start], outputs=z)
+    descrim.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #descrim.summary()
+    #ce = audio_context
+    return descrim
+
 
 image_shape = (INPUT_SHAPE, IMAGE_CHANNELS)
 optimizer = Adam(1.5e-4,0.5) # learning rate and momentum adjusted from paper
 
 discriminator = build_discriminator()
-discriminator.trainable = False
-discriminator.compile(loss="binary_crossentropy",optimizer=optimizer,metrics=["accuracy"])
-gener = Gener(INPUT_SHAPE,IMAGE_CHANNELS)
+#discriminator.trainable = False
+#discriminator.compile(loss="binary_crossentropy",optimizer=optimizer,metrics=["accuracy"])
+#gener = Gener(INPUT_SHAPE,IMAGE_CHANNELS)
+gener = Gener()
 gener.summary()
+discriminator.summary()
 
-random_input = Input(shape=(SEED_SIZE,))
+#
+# Training block
+#
 
-generated_image = gener(random_input)
+iter = 10
+BATCH_SIZE = 2
+save_dir = "./gener_output"
+start = 0
+for step in range(iter):
+    rand_lat = np.random.normal(size=(BATCH_SIZE, 720))
+    generated_images = gener.predict([image[], audio])
+    stop = start+BATCH_SIZE
+    real_image = [training_vid[start:stop], training_aud[start:stop]]
+    combined_image =
+
+
+
+#random_input = Input(shape=(SEED_SIZE,))
+
+generated_image = gener()
 
 validity = discriminator(generated_image)
 combined = Model(random_input,validity)
@@ -288,8 +399,8 @@ fixed_seed = np.random.normal(0, 1, (PREVIEW_ROWS * PREVIEW_COLS, SEED_SIZE))
 
 cnt = 1
 for epoch in range(EPOCHS):
-    idx = np.random.randint(0,training_data.shape[0],BATCH_SIZE)
-    x_real = training_data[idx]
+    idx = np.random.randint(0,training_vid.shape[0],BATCH_SIZE)
+    x_real = training_vid[idx]
     x_real = x_real.reshape((-1, 64, 64, 3))
 
     # Generate some images

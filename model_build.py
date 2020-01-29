@@ -32,8 +32,6 @@ import tensorflow as tf
 # load other stuff stuff
 import os
 import numpy as np
-from PIL import Image
-from tqdm import tqdm
 
 def noise_enc():
     ne = None
@@ -249,6 +247,92 @@ def build_discriminator():
 
     #out = Activation('sigmoid', name='strong_out')(z)
     descrim = Model(inputs=[y_start, x_start], outputs=z)
+    descrim.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #descrim.summary()
+    #ce = audio_context
+    return descrim, x_start
+
+def build_frame_discriminator():
+    # one aproch
+    # https://towardsdatascience.com/an-approach-towards-convolutional-recurrent-neural-networks-f54cbeecd4a6
+
+    # vary settings
+    shape_in_x = int(64), int(128), int(3)
+    #shape_out = int(8134), int(120)
+    dropoutrate = 0.3
+
+    x_start = Input(shape=(shape_in_x))
+    x1_start = Input(shape=(shape_in_x))
+    x = x_start
+
+    for _i, _cnt in enumerate((2, 2)):
+        x = Conv2D(filters = 100, kernel_size=(2, 2), padding='same',)(x)
+        x = BatchNormalization(axis=-1)(x)
+        #x = Activation('relu')(x)
+        x = LeakyReLU()(x)
+        #x = MaxPooling2D(pool_size=(2,2), dim_ordering="th" )(x)
+        x = MaxPooling2D(pool_size=2)(x)
+        x = Dropout(dropoutrate)(x)
+
+    x = Flatten()(x) # shape out = none 16000
+    #out = Activation('sigmoid', name='strong_out')(x)
+    #audio_context = Model(inputs=x_start, outputs=out)
+    #audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #audio_context.summary()
+    # I don't think we need y
+
+    #y_start = Input(shape=(shape_in_y))
+    #y = y_start
+
+    #for _i, _cnt in enumerate((2, 2)):
+    #    y = Conv2D(filters = 100, kernel_size=(2, 2), padding='same',)(y)
+    #    y = BatchNormalization(axis=-1)(y)
+    #    #y = Activation('relu')(y)
+    #    y = LeakyReLU()(y)
+    #    #y = MayPooling2D(pool_size=(2,2), dim_ordering="th" )(y)
+    #    y = MaxPooling2D(pool_size=2)(y)
+    #    y = Dropout(dropoutrate)(y)
+
+    #y = Flatten()(y)
+    #out = Activation('sigmoid', name='strong_out')(y)
+    #audio_context = Model(inputs=y_start, outputs=out)
+    #audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #audio_context.summary()# (None, 51200)
+
+    # z is duplicate picture input
+    z = Concatenate()([x, x])
+    #z = Reshape((-1, 1))(z) # Why dose this not work?
+    #z = Reshape((67200, 1))(z)
+    #out = Activation('sigmoid', name='strong_out')(z)
+    #audio_context = Model(inputs=[x_start,y_start], outputs=out)
+    #audio_context.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
+    #audio_context.summary() # (None, 67200)
+
+    # The Gru/recurrent portion
+    # Get some knowledge
+    # http://colah.github.io/posts/2015-08-Understanding-LSTMs/
+    #for r in (10,10):
+    #    z = Bidirectional(
+    #            GRU(r,
+    #                activation='tanh',
+    #                dropout=dropoutrate,
+    #                recurrent_dropout=dropoutrate,
+    #                return_sequences=True),
+    #            merge_mode='concat')(z)
+    #    for f in ((2,2)):
+    #        z = TimeDistributed(Dense(f))(z)
+
+    #z = Dropout(dropoutrate)(z)
+    #z = TimeDistributed(Dense(880))(z)
+    # arbitrary reshape may be a problem
+    #z = Flatten()(z)
+    z = Dropout(dropoutrate)(z)
+    z = Dense(1000,activation = 'sigmoid')(z)
+    z = Dense(100,activation = 'sigmoid')(z)
+    z = Dense(1,activation = 'sigmoid')(z)
+
+    #out = Activation('sigmoid', name='strong_out')(z)
+    descrim = Model(inputs=[x1_start, x_start], outputs=z)
     descrim.compile(optimizer='Adam', loss='binary_crossentropy',metrics = ['accuracy'])
     #descrim.summary()
     #ce = audio_context
